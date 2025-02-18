@@ -308,7 +308,7 @@ age_ci_upper_or = 0.9938530 + 1.96 * 0.0022824
 
 ```
 
-A one unit increase in age is associated with a decrease in the log-odds of being satisfied with spending on mass transportation by 0.00616 units (95% CI \[-0.0106, -0.00169\]), holding all other variables constant. The odds ratio is less than 1 (0.994) which confirms the negative relationship implied by the log-odds coefficient. Specifically, for each additional unit of age, the odds of being satisfied with mass transportation spending decrease by a factor of about 0.994, or approximately 0.998 per unit increase in age, holding other factors constant (95% CI \[0.989, 0.998\]).
+A one unit increase in age is associated with a decrease in the log-odds of being satisfied with spending on mass transportation by 0.00616 units (95% CI \[-0.0106, -0.00169\]), holding all other variables constant. The odds ratio is less than 1 (0.994) which confirms the negative relationship implied by the log-odds coefficient. Specifically, for each additional unit of age, the odds of being satisfied with mass transportation spending decrease by a factor of about 0.994, or approximately 0.6% per unit increase in age, holding other factors constant (95% CI \[0.989, 0.998\]).
 
 > Consider the relationship between SES and one’s opinion about spending on mass transportation. Interpret the coefficient of SES in terms of the logs odds and OR of being satisfied with spending on mass transportation. Please include the 95% CIs around each estimate. ß
 
@@ -332,16 +332,24 @@ A one unit increase in SES index is associated with a decrease in the log-odds o
 > Calculate the marginal effects of sex, age, and SES on mass transportation spending. You can use the `margins` package function `margins` discussed in your textbook or you can use the `marginaleffects` package `avg_slope` `avg_comparisons` discussed in lecture. Interpret each estimate.
 
 ```{r}
+
+#Marginal effects
+library(margins)
+marg1 <- margins(m1)
+summary(marg1)
+
+avg_slopes(m1)%>%kable()
+
 avg_comparisons(m1, comparison = "difference") %>% 
   kable()
 
 ```
 
--   The marginal effect of age is \_\_\_ (95% CI \[\_\_\_, \_\_\_\]). So, for each additional unit increase of age, the probability of being satisfied with mass transportation spending decreases by approximately \_\_ percentage points, holding other factors constant (p = \_\_\_).
+-   The marginal effect of age is -0.0015 (95% CI \[-0.0026, -0.0004\]). So, for each additional unit increase of age, the probability of being satisfied with mass transportation spending decreases by approximately 0.15 percentage points, holding other factors constant (p = 0.0066).
 
--   The marginal effect of SES is \_\_\_ (95% CI \[\_\_\_, \_\_\_\_\]). For each one-unit increase in the socioeconomic index, the probability of being satisfied with mass transportation spending decreases by approximately \_\_ percentage points, holding other variables constant.
+-   The marginal effect of SES is also -0.0015 (95% CI \[-0.0023, -0.0007\]). For each one-unit increase in the socioeconomic index, the probability of being satisfied with mass transportation spending decreases by approximately 0.15 percentage points, holding other variables constant.
 
--   The marginal effect for being female compared to male is \_\_\_ (95% CI \[\_\_, \_\_\_\]). This indicates that females are, on average, about \_\_\_ percentage points more likely than males to be satisfied with mass transportation spending, holding other factors constant.
+-   The marginal effect for being female compared to male is 0.0631 (95% CI \[0.0246, 0.102\]). This indicates that females are, on average, about 6.3 percentage points more likely than males to be satisfied with mass transportation spending, holding other factors constant.
 
 ## Model comparison
 
