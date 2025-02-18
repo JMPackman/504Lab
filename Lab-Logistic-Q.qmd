@@ -359,9 +359,13 @@ avg_comparisons(m1, comparison = "difference") %>%
 
 ```{r}
 
-fit2 <- ___
+fit2 <- glm(data = data, 
+            family = binomial,
+            mass_trans_spend_right ~ age + sex + sei10)
 
-fit3 <- ___
+fit3 <- glm(data = data, 
+            family = binomial,
+            mass_trans_spend_right ~ age + sex + sei10 + polviews)
 
 test_likelihoodratio(fit2, fit3) %>% kable()
 
@@ -370,7 +374,7 @@ test_likelihoodratio(fit2, fit3) %>% kable()
 
 > Is the model with polviews better than the model without?
 
--   Yes.
+-   Yes, it appears that the model is better with polviews.
 
 ## Visualization
 
@@ -378,13 +382,13 @@ test_likelihoodratio(fit2, fit3) %>% kable()
 
 -   We next use the model to produce visualizations:
 
-    -   Given the code below, interpet what is being plotted:
+    -   Given the code below, interpret what is being plotted:
 
-        -   pol_plot : \_\_\_\_
+        -   pol_plot : Predicted probability of reporting being satisfied with mass transportation spending for each political view.
 
-        -   sex_plot : \_\_\_\_
+        -   sex_plot : Predicted probability of reporting being satisfied with mass transportation spending for each gender group.
 
-        -   ses_plot: \_\_\_
+        -   ses_plot: The predicted probability of satisfaction changes vs SES, a continuous variable.
 
     ::: callout-tip
     -   adjust the various settings in your plot to make it look professional.
@@ -410,7 +414,7 @@ pp_pol <- ggemmeans(fit3, terms = c("polviews"))
 
 # Adjusted plot with gradient colors
 pol_plot <- ggplot(pp_pol, aes(x = x, y = predicted, color = x)) +
-  geom_point(size = 2) +
+  geom_point(size = 2, show.legend = FALSE) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
   scale_color_manual(values = colors) +
   labs(title = "Effect of Political Views on Satisfaction with Mass Transportation",
@@ -424,38 +428,50 @@ pp_sex <- ggemmeans(fit3, terms = c("sex"))
 
 sex_plot <- ggplot(pp_sex, aes(x = x, y = predicted, color = x)) +
   geom_point(size = 2) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, show.legend = FALSE) +
   labs(title = "Effect of Sex on Satisfaction with Mass Transportation",
        x = "Sex", y = "Predicted Probability",
        color = "Sex") +
   theme_minimal()
 
 pp_sex
+sex_plot
 
-pp_ses <- ggemmeans(fit3, terms = "sei10")
+pp_ses <- ggemmeans(fit3, terms = "sei10 [all]")
 
 
 ses_plot <-  ggplot(pp_ses, aes(x = x, y = predicted)) +
   geom_line(color = "#2c7fb8", size = 1) + 
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "#2c7fb8", alpha = 0.2) +  # Add a confidence interval band
   labs(title = "Effect of SES on Satisfaction with Mass Transportation",
-       x = "Socioeconomic Status", y = "Predicted Probability") +
+       x = "Socioeconomic Status Index (higher numbers indicate higher status)", y = "Predicted Probability") +
   theme_minimal() +
   theme(legend.position = "none")  
 ses_plot
 
 ```
 
+Note: no matter in which layer I put "show.legend = FALSE," I can't get the legends to disappear.
+
+Question: What is the difference between ggmeans and ggeffects for calculating the predicted probabilities?
+
 ## Model Assumptions
 
 -   Is the logistic model a good choice for this data?
 
 ```{r}
+library(easystats)
+#fit2
 binned_residuals(fit2)
+check_model(fit2, check = c("binned_residuals", "outliers", "vif"), residual_type = "normal")
+
+#fit3
+binned_residuals(fit3)
+check_model(fit3, check = c("binned_residuals", "outliers", "vif"), residual_type = "normal")
 ```
 
 ::: callout-note
-Answer: \_\_\_\_\_\_
+Answer: Model assumptions are generally met. VIF is low for both fit2 and fit3, meaning we do not have to worry about multicolinearity. There also do not seem to be outliers. As for binned residuals, 86% of the residuals are within the error bounds for fit2, and 90% of residuals are in error bounds for fit3. A warning indicates that "\~95% or higher would be good," so fit2 and fit3 fall a little short on this criterion.
 :::
 
 ## Model fit
@@ -466,9 +482,11 @@ Answer: \_\_\_\_\_\_
 
 r2_mcfadden(fit2)
 
+r2_mcfadden(fit3)
+
 ```
 
-> R2 interpretation: \_\_\_\_
+> R2 interpretation: Fit3, which includes polviews, has a higher McFadden's Pseudo R2, which suggests improvement over fit2 in goodness of fit.
 >
 > Next, Take a look at the binned residual plots for each continuous predictor variable and look at linearity. Is there a predictor that sticks out? What can we do to improve model fit in this case?
 
@@ -483,7 +501,7 @@ binned_residuals(fit2, term="age") %>% plot(show_dots=TRUE)
 
 ::: callout-note
 -   ::: callout-note
-    \_\_\_\_\_
+    Sei10 has more residuals outside of the error bounds. Since some of the bins have average residuals with large magnitudes, that might suggest the need for an interaction term. For example, SES might interact with age or political views.
     :::
 :::
 
@@ -495,17 +513,19 @@ emmeans(fit3, "polviews") %>% pairs() %>% as.data.frame() %>% filter(p.value < .
 emmeans(fit3, "polviews", type="response") %>% pairs() %>% as.data.frame() %>% filter(p.value < .05)
 ```
 
--   Conservatives are \_\_ times more likely to support mass transit spending compared to extremely liberal and liberal
+-   Conservatives are 2.70 times more likely to support mass transit spending compared to extremely liberal people and 2.17 times more likely to support mass transit spending compared to liberals (Question: I took the inverse of the odds ratios above to calculate these values. Is this correct?)
 
--   Extreme liberals are \_\_\_ times more likely to support spending compared to conservatives, moderates and slight conservatives
+-   Extreme liberals are 0.370, 0.396, and 0.428 times more likely to support spending compared to conservatives, moderates and slight conservatives, respectively (Question: this would just be the odds ratios as depicted in the output above, correct?)
 
--   Extrm conservatives are \_\_ times more likely to support mass spending than liberals and slight liberals
+-   Extreme conservatives are 3.07 times more likely to support mass spending than liberals and 2.08 times more likely than slight liberals.
 
--   Liberals are \_\_ times more likely to support spending than moderates and slight conservatives.
+-   Liberals are 0.492 times and 0.532 times more likely (i.e., about half as likely) to support spending than moderates and slight conservatives, respectively.
 
 ## Conclusion
 
 \_\_\_ based on the model summary below, and the three figures.
+
+Satisfaction with mass transit spending (dichotomous) was modeled as a function of age, gender (male, female), and SES. Female respondents and respondents identifying as more politically conservative demonstrated higher predicted probabilities of reporting satisfaction with transportation spending. SES and age, which were continuous variables, had a negative relationship with predicted probability of satisfaction, such that every unit increase in age and SES predicted decreases in the likelihood of reporting satisfaction. Does the model summary indicate that including each of the predictors significantly improves the model?
 
 ```{r model-summary, results='asis', echo=FALSE , fig.cap="Table 1"}
 
