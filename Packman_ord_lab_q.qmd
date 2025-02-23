@@ -130,7 +130,6 @@ ggplot(data = gb, mapping = aes(x = Age, fill = Technical.Rank)) +
 -   Convert input variables to categorical factors as appropriate.
 
     ```{r}
-    #Remember to save the variable as a factor, not a character
     gb$Gender <- as.factor(gb$Gender)
     ```
 
