@@ -1,0 +1,238 @@
+---
+    title: "Lab 5 - Poisson Regression - Answers"
+    author:
+      - name: James Packman
+    date: last-modified
+    format:
+      html:
+        self-contained: true
+        anchor-sections: true
+        code-tools: true
+        code-fold: true
+        fig-width: 8
+        fig-height: 4
+        code-block-bg: "#f1f3f5"
+        code-block-border-left: "#31BAE9"
+        mainfont: Source Sans Pro
+        theme: journal
+        toc: true
+        toc-depth: 3
+        toc-location: left
+        captions: true
+        cap-location: margin
+        table-captions: true
+        tbl-cap-location: margin
+        reference-location: margin
+      pdf:
+        pdf-engine: lualatex
+        toc: false
+        number-sections: true
+        number-depth: 2
+        top-level-division: section
+        reference-location: document
+        listings: false
+        header-includes:
+          \usepackage{marginnote, here, relsize, needspace, setspace}
+          \def\it{\emph}
+
+    comments:
+      hypothesis: false
+
+    execute:
+      warning: false
+      message: false
+---
+
+1.  To complete this lab:
+
+-   Load packages
+
+```{r}
+library(MASS)
+library(tidyverse)
+library(emmeans)
+library(ggeffects)
+library(easystats)
+library(performance)
+library(knitr)
+```
+
+- Download the dataset:
+
+```{r}
+
+library(tidyverse)
+
+data <- read_delim("https://raw.githubusercontent.com/jgeller112/psy504-advanced-stats/main/slides/Poisson/data/2010.csv")
+
+```
+
+2. Conduct the analysis described in the preregistration document
+
+a.  The number of hours per week that a person spends on the Internet ("WWWHR") will\
+    be predicted by their vocabulary ("WORDSUM"), age ("AGE"), sex ("SEX"), religiosity\
+    ("RELITEN"), political orientation ("POLVIEWS"), and how often they work from home\
+    ("WRKHOME").
+
+
+- Let's use the `naniar` package's function `replace_with_na`to clean the data. 
+
+```{r}
+library(naniar)
+
+data_pos <- data %>%
+  dplyr::select(wwwhr, wordsum, age, sex, reliten, polviews, wrkhome) %>%
+replace_with_na(.,
+             replace = list(wwwhr = c(-1, 998, 999),
+                          wordsum = c(-1, 99),
+                          reliten = c(0, 8, 9), 
+             polviews = c(0, 8, 9), 
+             wrkhome = c(0,8,9), 
+             age=c(0, 98, 99)))
+```
+Q: Can you explain what might be going on in the above code?
+
+A: The code is replacing values in the data set that correspond either to missing data or declined responses that are numeric but nonsensical (e.g., an age of zero might indicate that a participant declined to list their age) with N/A. 
+
+Q: The next step in data cleaning would be to ensure that the data in your code are aligned with the description/ usage context of the variables
+
+- Recode sex and reliten as necessary
+
+```{r}
+
+#Recode sex as factor (not ordered)
+data_pos$sex <- as.factor(data_pos$sex)
+
+#Recode reliten as ordered factor because the intervals between scale points are unclear
+data_pos$reliten_recode <- as.ordered(data_pos$reliten)
+
+```
+## Missingness
+```{r}
+data_pos %>%
+  dplyr::select(reliten, reliten_recode)
+
+library(skimr)
+skimr::skim(data_pos)
+
+```
+
+
+## Fit a Poisson model to the data.
+
+```{r}
+model_glm <- glm(wwwhr ~ wordsum + age + sex + reliten_recode + polviews + wrkhome, data = data_pos, family = poisson(link = "log")) # change family to poisson
+
+parameters::model_parameters(model_glm, exponentiate = FALSE) %>% kable(digits = 3, format = "markdown")
+
+#Marginal effects by sex, just for fun
+marginaleffects::avg_predictions(model_glm, variables="sex") %>% 
+  kable(digits = 3, format = "markdown")
+
+
+
+```
+## Carry out model checking
+
+Hint: performance package has the function you're looking for
+
+```{r}
+performance::check_model(model_glm, check = c("pp_check", "outliers", "vif", "overdispersion"))
+```
+
+## Find any outliers
+
+```{r}
+check_outliers(model_glm)
+
+data_pos_no_outliers <- data_pos[-c(72,156,363), ]
+```
+
+## Refit the model after excluding outliers
+
+```{r}
+model_glm2 <- glm(wwwhr ~ wordsum + age + sex + reliten_recode + polviews + wrkhome, data = data_pos_no_outliers, family = poisson(link = "log")) # change family to poisson
+
+```
+
+```{r}
+model_parameters(model_glm2) %>%
+  print_html()
+```
+
+### Check for Overdispersion 
+
+Hint: performance package has the function you're looking for
+```{r}
+performance::check_overdispersion(model_glm2)
+```
+
+What do you notice? Overdispersion detected, which indicates there is more variation in the responses than what's implied by the model. This gives us artificially small p-values and standard errors. 
+And what's a good next step forward? We could take overdispersion into account by using robust standard errors, or by using a negative binomial regression model.  
+Can there be another model class that can fit the data? If so, fit this model to the data. 
+Negative binomial regression model might work. 
+
+```{r}
+library(MASS)
+m.nb <- MASS::glm.nb(wwwhr ~ wordsum + age + sex + reliten_recode + polviews + wrkhome, data=data_pos_no_outliers)
+#overall model LRT
+nb_model <- car::Anova(m.nb, type="II")
+nb_model %>% kable(digits = 3, format = "markdown")
+```
+
+## Which one is better- your earlier model, or later model?
+
+```{r}
+test_likelihoodratio(model_glm2, m.nb) %>%
+  kable()
+```
+It looks like the negative binomial model is better, according to LRT. 
+
+## What is zero inflation? Is there zero-inflation in your chosen model?
+```{r}
+#Zero-inflation occurs when too many zeros bias results, based on the assumption that 0s occur as part of the same DGP, which is not necessarily the case. 
+library(DHARMa)
+performance::check_zeroinflation(m.nb)
+```
+
+It does not look like there is zero inflation, as observed zeros < predicted zeros. 
+
+::: panel-tabset
+## Log Lambda
+
+```{r}
+model_parameters(m.nb) %>%
+  print_html()
+
+#R2
+performance::r2(m.nb)
+
+```
+
+## Mean Count
+
+```{r}
+#Difference in counts
+marginaleffects::avg_comparisons(m.nb, variables = c("wordsum", "age", "sex", "reliten_recode", "polviews", "wrkhome")) %>%
+  kable()
+```
+:::
+
+## Report your conclusions
+
+We fitted a negative binomial regression model to predict the number of hours per week that a person spends on the Internet (“WWWHR”) with their vocabulary (“WORDSUM”), age (“AGE”), sex (“SEX”), religiosity (“RELITEN”; recoded as an ordered factor), political orientation (“POLVIEWS”), and how often they work from home (“WRKHOME”). The formula took the form of: wwwhr ~ wordsum + age + sex + reliten_recode + polviews + wrkhome. A negative binomial model was more appropriate than a Poisson glm due to overdispersion: the negative binomial model includes a dispersion parameter. 
+The model's total explanatory power is moderate (Nagelkerke's R2 for generalized linear regression = 0.212). 
+
+ Within this model:
+ 
+   - The effect of vocabulary is statistically significant and positive (beta = 0.11, 95% CI [0.05, 0.16], p < 0.001; SE = 0.03). An increase in vocabulary by one, holding all else constant, was associated with an increase in mean count of hours per week spent online of approximately 1.12 (95% CI [0.53, 1.70], p < 0.001; SE = 0.30). 
+   
+  - The effect of age is statistically significant and negative (beta = -0.02, 95% CI [-0.02, -8.97e-03], p < 0.001; SE = 3.53e-03). As age increased by one year, mean count for hours per week spent online decreased by approximately 0.15 (95% CI [-0.23, -0.09], p < 0.001; SE = 0.04)
+  
+  - The effect of sex trended towards significance, but was not significant at the 5% level (beta = 0.16, 95% CI [-0.02, 0.034], p = 0.073; SE = 0.09). Respondents indicating sex = 1 were, relative to those indicating sex = -1, reported spending some more time online, but this was not statistically significant (mean count difference = 1.60; 95% CI [-0.17, 3.36], p = 0.08; SE = 0.90).
+
+  - The linear effect of religiosity is statistically significant and positive (beta = 0.44, 95% CI [0.25, 0.63], p < 0.001; SE = 0.10).Quadratic and cubic effects of religiosity were nonsignificant (p = 0.871 and 0.420, respectively). Relative to respondents with religiosity = 1, respondents with religiosity = 2, 3, and 4 spent more time online (mean count difference = 2.58, 3.04, and 6.24, respectively; 95% CIs [0.85, 4.30], [-0.82, 6.90], and [3.62, 8.86], respectively). Of note, the contrast between religiosity = 3 and religiosity = 1 was nonsignificant (p = 0.12), but contrasts between religiosity = 2 and = 1 and between religiosity = 4 and = 1 were significant (p = 0.003 and p < 0.001, respectively). 
+  
+  - The effect of political views is not significant (beta = -0.03, 95% CI [-0.10, 0.03], p = 0.336; SE = 0.03).
+  
+  - The effect of working from home is statistically significant and positive (beta = 0.06, 95% CI [3.37e-03, 0.11], p = 0.035; SE = 0.03). An increase in working from home by 1 (the preregistration does not specify if this indicates an hour increase or some other indicator of the frequency of working from home; suffice it to say that an increase in "wrkhome" reflects working more from home), holding other variables constant, is associated with more hours per week online (mean count difference = 0.58, 95% CI [0.02,1.14], p = 0.043; SE = 0.29). 
