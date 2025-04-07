@@ -225,14 +225,19 @@ tibble(r = residuals(fit1.ols)) %>%
   geom_histogram(binwidth = 1)
 ```
 
-### Question 1.2: Can you predict what the mean value, and standard deviations will be? Why? Calculate it. Compare this against outputs in summary(fit1.ols) and explain. Map the values you find to the latex equations before. –Come back to this!!!!!!
+### Question 1.2: Can you predict what the mean value, and standard deviations will be? Why? Calculate it. Compare this against outputs in summary(fit1.ols) and explain. Map the values you find to the latex equations before. 
 
 ```{r}
 summary(fit1.ols)
+coef(fit1.ols)
 mean(chinstrap$bill_length_mm)
 mean(chinstrap$body_mass_g)
+sd(chinstrap$bill_length_mm)
+sd(chinstrap$body_mass_g)
 
 ```
+
+Using the formula from the latex equation, we know that the mean bill length (mm) = intercept + B1 \* mean body mass.
 
 ## Bayes with default settings
 
