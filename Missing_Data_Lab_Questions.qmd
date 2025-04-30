@@ -1,0 +1,212 @@
+---
+title: "Missing_Data_Lab"
+format: html
+editor: visual
+---
+
+Missing data is a common problem and dealing with it appropriately is extremely important. Ignoring the missing data points or filling them incorrectly may cause the models to work in unexpected ways and cause the predictions and inferences to be biased.
+
+Le'ts consider built-in dataset 'airquality' in R as a sample dataset.
+
+```{r}
+# Load the airquality dataset
+data("airquality")
+
+#Load required packages
+library(tidyverse) 
+library(easystats)
+library(knitr)
+library(broom) #tidy statistics
+library(ggmice) #graph missing data
+library(mice) # dealing and visualizing missing data
+library(naniar) # missing data + visualization
+library(finalfit)# missing data visualization
+```
+
+#### Question 1:
+
+(a) Examine this dataset for missing values. While there are many ways to do this, the skim function from the library 'skimr' is elegant.
+
+    Answer: There are missing values for Ozone (37) and Solar.R (7).
+
+(b) use the nanair package to visualize missing values
+
+    Answer: See code chunk below.
+
+(c) even though it's hard to confirm based on visualizations alone, what do your visualizations lead you to believe about the missing data being MCAR, MAR, or MNAR?
+
+    Answer: The missing data pattern plot suggests a non-monotone pattern. I believe it is not MCAR, but might be MAR.
+
+(d) Carry out Little's statistical test to evaluate MCAR and report results.
+
+    Answer: Little's test yielded Chi-square(14) = 35.11; p = 0.0014, which suggests that the data is not missing completely at random. See code chunk below.
+
+(e) Creating a binary indicator for missingness allows you to test whether the presence of missing data is related to observed data.
+
+    -   For instance, you can create a dummy variable: 1 = Missing; 0 = Observed.
+    -   Next you can conduct a chi-square test or t-test:
+        -   Chi-square: Compare proportions of missingness ***across groups***.
+        -   T-test: Compare means of (other) observed variables with missingness indicators.
+
+    Answer: Fitting linear models (see code chunk below) indicated that missingness in ozone data is related to month and possibly temperature. Assessed alone, temperature is not significantly correlated with missingness in ozone data. However, temperature would vary by month, which suggests a time-related reason for missingness in ozone data. Missingness in solar radiation data appears weakly related to day. Missingness between the two does not appear to be related.
+
+```{r}
+#A: There are missing values for Ozone (37) and Solar.R (7) 
+library(knitr)
+library(skimr)
+skimr::skim(airquality) %>% 
+  kable()
+
+#B: 
+library(naniar)
+vis_miss(airquality)
+
+#C: The missing data pattern plot suggests a non-monotone pattern.
+library(ggmice)
+airquality %>%
+ # creates missing data pattern plot
+plot_pattern()
+
+#D:Little's test yielded Chi-square(14) = 35.11; p = 0.0014, which suggests that the data is not missing completely at random. 
+mcar_test(airquality) %>% kable()
+
+#E:
+airquality_r <- airquality %>%  
+  mutate(Ozone_1 = ifelse(is.na(Ozone), 1, 0))
+airquality_r %>% head() %>% kable()
+
+airquality_r <- airquality_r %>%
+  mutate(Solar.R_1 = ifelse(is.na(Solar.R), 1, 0))
+airquality_r %>% head() %>% kable()
+
+#Check if Ozone_1 is related to other variables
+model <- lm(Ozone_1 ~ Day + Month + Wind + Temp + Solar.R, data=airquality_r)
+tidy(model) %>%
+  kable()
+#It appears that missingness in ozone data is related to month and possibly temperature.
+model2 <- lm(Ozone_1 ~ Month + Temp, data=airquality_r)
+tidy(model2) %>%
+  kable()
+#Month is correlated with missingness in ozone data
+model3 <- lm(Temp ~ Ozone_1, data=airquality_r)
+summary(model3)
+#Assessed alone, temperature is not significantly correlated with missingness in ozone data. However, temperature would vary by month, which suggests a time-related reason for missingness in ozone data. 
+
+model4 <- lm(Solar.R_1 ~ Day + Month + Wind + Temp + Ozone, data=airquality_r)
+tidy(model4) %>%
+  kable()
+#Missingness in solar radiation data appears weakly related to day.
+
+model5 <- lm(Solar.R_1 ~ Day, data=airquality_r)
+summary(model5)
+#Missingness in solar radiation data appears weakly related to day.
+
+model6 <- lm(Solar.R_1 ~ Ozone_1, data=airquality_r)
+summary(model6)
+#Missingness between the two does not appear to be related. 
+```
+
+#### Question 2:
+
+Create **new and appropriately named datasets** that are based on airquality for each of the following ways of fixing the dataset:
+
+```         
+  - (a) "listwise deletion" or "complete case analysis" --- where entire records from the analysis are removed if they are missing any data point in one or more variables 
+  
+  - (b) Imputation with mean --- involves filling in the missing values with the mean of the available values in the same variable.
+  
+  - (c) Imputation with regression (use mice package)
+  
+  - (d) Imputation with stochastic regression (use mice package)
+
+  - (e) Imputation with multiple induction (use mice package, 5 imputations, and Predictive mean matching method)
+```
+
+\
+
+```{r}
+#A: Listwise Deletion
+airquality_listwise_deletion <- airquality_r %>%
+  drop_na()
+
+#B: Imputation with mean: created a new column, Ozone_mean_imp, in airquality_r dataframe
+Ozone_mean <- mean(airquality_r$Ozone, na.rm = TRUE)
+airquality_Mean_Imp <- airquality_r %>%
+  mutate(Ozone = ifelse(is.na(Ozone), Ozone_mean,Ozone))
+#For Solar.R
+Solar.R_mean <- mean(airquality_Mean_Imp$Solar.R, na.rm = TRUE)
+airquality_Mean_Imp$Solar.R <- ifelse(is.na(airquality_Mean_Imp$Solar.R), Solar.R_mean, airquality_Mean_Imp$Solar.R)
+
+#C: Imputation with regression:
+library(mice)
+lm(Ozone~Month, data = airquality)
+lm(Solar.R~Day, data = airquality)
+imp.regress <- mice(airquality, method="norm.predict", m = 1, maxit=1)
+#Put values into a dataframe, then merge with airquality dataframe
+Imp_Reg_Ozone <- as.data.frame(imp.regress$imp$Ozone)
+Imp_Reg_Ozone['rowID'] <- row.names(Imp_Reg_Ozone) 
+airquality['rowID'] <- row.names(airquality)
+airquality_Imp_Reg <- merge(airquality, Imp_Reg_Ozone, by = "rowID", all = TRUE)
+airquality_Imp_Reg$Ozone <- ifelse(is.na(airquality_Imp_Reg$Ozone), airquality_Imp_Reg$`1`, airquality_Imp_Reg$Ozone)
+#Not sure why some of these are negative
+
+#D: Stochastic Regression Imputation
+stoch.regress <- mice(airquality[c("Temp", "Day", "Month", "Solar.R", "Ozone", "Wind")], m =1, method = "norm.nob")
+#Put values into a dataframe, then merge with airquality dataframe
+Stoch_Reg_Ozone <- as.data.frame(stoch.regress$imp$Ozone)
+Stoch_Reg_Ozone['rowID'] <- row.names(Stoch_Reg_Ozone) 
+airquality['rowID'] <- row.names(airquality)
+airquality_Stoch_Reg <- merge(airquality, Stoch_Reg_Ozone, by = "rowID", all = TRUE)
+airquality_Stoch_Reg$Ozone <- ifelse(is.na(airquality_Stoch_Reg$Ozone), airquality_Stoch_Reg$`1`, airquality_Stoch_Reg$Ozone)
+#Not sure why some of these are negative
+
+#E: Imputation with Multiple Induction
+m=5
+imp <- mice(airquality[c("Temp", "Day", "Month", "Solar.R", "Ozone", "Wind")], m = m, seed = 39, method="pmm", print = FALSE)
+str(imp, max.level = 1)
+str(imp$imp, max.level = 1)
+#imputed values for ozone
+head(imp$imp$Ozone)
+
+#fit the model to each set of imputaed data
+fit <- with(data = imp, expr = lm(Ozone ~ Month))
+summary(fit) %>%
+  kable()
+#combine the results
+result <- pool(fit)
+model_parameters(result) %>%
+  kable()
+
+library(marginaleffects)
+mfx_mice <- avg_slopes(fit) # you would use avg_comparions for categorical variables
+mfx_mice %>% kable()
+
+# create stripplot to make sure imputations look similar to real data
+ggmice(imp, ggplot2::aes(x = .imp, y = Ozone)) +
+  ggplot2::geom_jitter() + 
+    labs(x = "Imputation number")
+
+#MI_Ozone <- as.data.frame(imp$imp$Ozone)
+
+
+```
+
+#### Question 3:
+
+Compare the eventual distribution from these datasets on the variable 'Ozone' against the original. Below is a template that considers only 2 datasets but please consider all the datasets you generated within a single plot
+
+```{r}
+ ggplot(airquality, aes(x=Ozone, fill="Original")) +
+   geom_density(alpha=0.5) +
+   geom_density(data=airquality_Imp_Reg, aes(x=Ozone, fill="Imputation with Regression"), alpha=0.5) +
+   geom_density(data=airquality_Stoch_Reg, aes(x=Ozone, fill="Imputation with Stochastic Regression"), alpha=0.5) +
+   geom_density(data=airquality_listwise_deletion, aes(x=Ozone, fill="Listwise Deletion"), alpha=0.5) +
+  labs(title="Density Plot of Ozone: Original vs. Imputed")
+
+```
+
+What do you observe?
+
+I observe slightly different distributions for Ozone for each imputation method. It looks like listwise deletion inflates the density at Ozone = 25, which makes sense because listwise deletion will decrease the variance. The distribution for imputation with regression looks neat - almost too neat, while the stochastic regression imputation looks a little closer to the original around the 30-75 Ozone range.
+
+#### Of course, each dataset you produced will lead to different modeling results, but we won't go into that in today's lab.
